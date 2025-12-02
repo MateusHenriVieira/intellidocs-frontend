@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
-import { listTenants, createTenant, updateTenantStatus, Tenant } from "@/lib/api";
-import { Plus, Building2, CheckCircle, XCircle, Loader2, Lock } from "lucide-react";
+// IMPORTANTE: Adicione deleteTenant aqui
+import { listTenants, createTenant, updateTenantStatus, deleteTenant, Tenant } from "@/lib/api";
+// IMPORTANTE: Adicione Trash2 aqui
+import { Plus, Building2, CheckCircle, XCircle, Loader2, Lock, Trash2 } from "lucide-react";
 
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -30,22 +32,34 @@ export default function TenantsPage() {
     e.preventDefault();
     try {
       const res = await createTenant(name, cnpj, plan);
-      alert(`Prefeitura criada com sucesso!\n\nO login e senha inicial do admin é o CNPJ: ${res.generated_login}`);
+      alert(`Prefeitura criada!\nLogin Admin: ${res.generated_login}`);
       setIsModalOpen(false);
       loadData();
       setName(""); setCnpj("");
-    } catch (err: any) { 
-      alert(err.message); 
-    }
+    } catch (err: any) { alert(err.message); }
   }
 
   async function toggleStatus(id: number, currentStatus: boolean) {
-    if (!confirm(currentStatus ? "Tem certeza que deseja BLOQUEAR esta prefeitura?" : "Deseja reativar esta prefeitura?")) return;
     try {
       await updateTenantStatus(id, !currentStatus);
       loadData();
     } catch (e) { alert("Erro ao atualizar"); }
   }
+
+  // --- NOVA FUNÇÃO DE DELETAR ---
+  async function handleDelete(id: number, name: string) {
+    const confirmMessage = `ATENÇÃO: Você está prestes a excluir a "${name}".\n\nIsso apagará TODOS os usuários e documentos desta prefeitura.\n\nTem certeza absoluta?`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        await deleteTenant(id);
+        loadData(); // Recarrega a lista
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  }
+  // ------------------------------
 
   return (
     <div className="flex bg-slate-50 min-h-screen">
@@ -60,7 +74,7 @@ export default function TenantsPage() {
             onClick={() => setIsModalOpen(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
           >
-            <Plus className="w-5 h-5" /> Cadastrar Prefeitura
+            <Plus className="w-5 h-5" /> Nova Prefeitura
           </button>
         </div>
 
@@ -98,12 +112,23 @@ export default function TenantsPage() {
                       </span>
                     </td>
                     <td className="p-6 text-right">
-                      <button 
-                        onClick={() => toggleStatus(t.id, t.is_active)}
-                        className={`text-xs font-bold px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 ml-auto ${t.is_active ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}
-                      >
-                        {t.is_active ? <><Lock className="w-3 h-3"/> Bloquear</> : <><CheckCircle className="w-3 h-3"/> Ativar</>}
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => toggleStatus(t.id, t.is_active)}
+                          className={`text-xs font-bold px-3 py-2 rounded-lg border transition-colors flex items-center gap-1 ${t.is_active ? 'border-orange-200 text-orange-600 hover:bg-orange-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}
+                        >
+                          {t.is_active ? <><Lock className="w-3 h-3"/> Bloquear</> : <><CheckCircle className="w-3 h-3"/> Ativar</>}
+                        </button>
+                        
+                        {/* BOTÃO DE EXCLUIR */}
+                        <button 
+                          onClick={() => handleDelete(t.id, t.name)}
+                          className="text-xs font-bold px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-colors flex items-center gap-1"
+                          title="Excluir Prefeitura"
+                        >
+                          <Trash2 className="w-3 h-3" /> Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -113,7 +138,7 @@ export default function TenantsPage() {
         )}
       </main>
 
-      {/* Modal de Cadastro */}
+      {/* Modal de Cadastro (Mantido igual) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-2xl p-8 shadow-2xl animate-in zoom-in-95 duration-200">

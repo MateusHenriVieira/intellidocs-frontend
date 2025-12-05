@@ -10,7 +10,7 @@ function getAuthHeaders(): Record<string, string> {
   return token ? { "Authorization": `Bearer ${token}` } : {};
 }
 
-// --- Interfaces de Tipagem (Models) ---
+// --- INTERFACES DE DADOS (MODELS) ---
 
 export interface User {
   id: number;
@@ -21,13 +21,69 @@ export interface User {
   pages_scanned_count: number;
 }
 
+export interface UserProfile {
+  id: number;
+  full_name: string;
+  email: string;
+  role: string;
+  department: string;
+  tenant_name: string;
+  stats: {
+    documents_uploaded: number;
+    pages_scanned: number;
+  };
+}
+
 export interface Tenant {
   id: number;
   name: string;
   cnpj: string;
   plan_type: string;
+  plan_value: number;
+  next_billing_date: string;
+  payment_status: string;
   is_active: boolean;
   created_at: string;
+}
+
+export interface Department {
+  id: number;
+  name: string;
+}
+
+// Detalhes completos da Prefeitura (Raio-X)
+export interface TenantDetails extends Tenant {
+  total_docs: number;
+  total_pages: number;
+  total_storage_gb: number;
+  departments: DeptStat[];
+  users: UserStat[];
+}
+
+export interface DeptStat {
+  name: string;
+  doc_count: number;
+  page_count: number;
+  storage_mb: number;
+}
+
+export interface UserStat {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  department: string;
+}
+
+export interface DepartmentDetails {
+  id: number;
+  name: string;
+  manager_name: string;
+  manager_email: string;
+  user_count: number;
+  doc_count: number;
+  page_count: number;
+  storage_estimate_mb: number;
 }
 
 export interface CreateTenantResponse {
@@ -38,6 +94,7 @@ export interface CreateTenantResponse {
 }
 
 export interface SearchResult {
+  doc_id: number;
   score: number;
   document_title: string;
   doc_type: string;
@@ -47,9 +104,18 @@ export interface SearchResult {
   created_at: string;
 }
 
+export interface SearchFilters {
+  docType?: string;
+  department?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export interface DashboardStats {
+  department_view: string;
   total_documents: number;
   total_pages: number;
+  storage_used_mb: number;
   documents_by_type: { type: string; count: number }[];
   recent_uploads: { title: string; date: string; type: string }[];
   weekly_activity: { name: string; value: number; fullDate: string }[];
@@ -62,13 +128,55 @@ export interface UploadResponse {
 }
 
 export interface BIResponse {
-  summary: string;
-  chart_type: "bar" | "line" | "pie" | "none";
-  data: { name: string; value: number }[];
-  kpi: { label: string; value: string };
+  report_title: string;
+  executive_summary: string;
+  kpis: {
+    label: string;
+    value: string;
+    trend?: string;
+    status: "positive" | "negative" | "neutral";
+  }[];
+  chart_config: {
+    value1_label: string;
+    value2_label: string;
+  };
+  main_chart: any[];
+  distribution_chart: { name: string; value: number }[];
+  insights: string[];
+  raw_data: {
+    document: string;
+    date: string;
+    value: string;
+    status: string;
+  }[];
 }
 
-// --- ROTAS DE AUTENTICAÇÃO E RECUPERAÇÃO ---
+export interface ChatResponse {
+  reply: string;
+}
+
+export interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  type: "info" | "success" | "warning" | "error";
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface PublicDocument {
+  title: string;
+  type: string;
+  created_at: string;
+  total_pages: number;
+  pages: {
+    page_number: number;
+    image_url: string;
+    text: string;
+  }[];
+}
+
+// --- ROTAS DE AUTENTICAÇÃO ---
 
 export async function loginUser(username: string, password: string): Promise<any> {
   const formData = new URLSearchParams();
@@ -125,6 +233,121 @@ export async function confirmPasswordReset(resetToken: string, newPassword: stri
   return res.json();
 }
 
+export async function getUserProfile(): Promise<UserProfile> {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao carregar perfil");
+  return res.json();
+}
+
+// --- ROTAS DE GESTÃO DE PREFEITURAS (SUPER ADMIN) ---
+
+export async function listTenants(): Promise<Tenant[]> {
+  const res = await fetch(`${API_BASE_URL}/admin/tenants`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao listar prefeituras");
+  return res.json();
+}
+
+export async function getTenantDetails(id: number): Promise<TenantDetails> {
+  const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}/details`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao carregar detalhes da prefeitura");
+  return res.json();
+}
+
+export async function createTenant(data: any): Promise<CreateTenantResponse> {
+  const res = await fetch(`${API_BASE_URL}/admin/tenants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Erro ao criar prefeitura");
+  }
+  return res.json();
+}
+
+export async function updateTenantStatus(id: number, isActive: boolean) {
+  const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  if (!res.ok) throw new Error("Erro ao atualizar status");
+  return res.json();
+}
+
+export async function renewTenant(id: number) {
+  const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({ renew_subscription: true }),
+  });
+  if (!res.ok) throw new Error("Erro ao renovar");
+  return res.json();
+}
+
+export async function runBillingCycle() {
+  const res = await fetch(`${API_BASE_URL}/admin/billing/run`, {
+    method: "POST",
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao rodar ciclo de cobrança");
+  return res.json();
+}
+
+export async function deleteTenant(id: number) {
+  const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("Erro ao excluir prefeitura");
+  return res.json();
+}
+
+// --- ROTAS DE GESTÃO DE SECRETARIAS (DEPARTAMENTOS) ---
+
+export async function listDepartments(): Promise<Department[]> {
+  const res = await fetch(`${API_BASE_URL}/departments`, { headers: getAuthHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getDepartmentDetails(id: number): Promise<DepartmentDetails> {
+  const res = await fetch(`${API_BASE_URL}/departments/${id}/details`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao carregar detalhes");
+  return res.json();
+}
+
+export async function createDepartment(data: { name: string, responsible_name: string, email: string, password: string }) {
+  const res = await fetch(`${API_BASE_URL}/departments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Erro ao criar secretaria");
+  }
+  return res.json();
+}
+
+export async function deleteDepartment(id: number) {
+  const res = await fetch(`${API_BASE_URL}/departments/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao apagar");
+  return res.json();
+}
+
 // --- ROTAS DE GESTÃO DE EQUIPE (USUÁRIOS) ---
 
 export async function listCompanyUsers(): Promise<User[]> {
@@ -139,7 +362,10 @@ export async function createCompanyUser(userData: any) {
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(userData),
   });
-  if (!res.ok) throw new Error("Erro ao criar usuário");
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "Erro ao criar usuário");
+  }
   return res.json();
 }
 
@@ -149,45 +375,6 @@ export async function deleteCompanyUser(id: number) {
     headers: getAuthHeaders()
   });
   if (!res.ok) throw new Error("Erro ao remover usuário");
-  return res.json();
-}
-
-// --- ROTAS DO SUPER ADMIN (TENANTS) ---
-
-export async function listTenants(): Promise<Tenant[]> {
-  const res = await fetch(`${API_BASE_URL}/admin/tenants`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) throw new Error("Erro ao listar prefeituras");
-  return res.json();
-}
-
-export async function createTenant(name: string, cnpj: string, plan: string): Promise<CreateTenantResponse> {
-  const res = await fetch(`${API_BASE_URL}/admin/tenants`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-    body: JSON.stringify({ name, cnpj, plan_type: plan }),
-  });
-  if (!res.ok) throw new Error("Erro ao criar prefeitura");
-  return res.json();
-}
-
-export async function updateTenantStatus(id: number, isActive: boolean) {
-  const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-    body: JSON.stringify({ is_active: isActive }),
-  });
-  if (!res.ok) throw new Error("Erro ao atualizar status");
-  return res.json();
-}
-
-export async function deleteTenant(id: number) {
-  const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error("Erro ao excluir prefeitura");
   return res.json();
 }
 
@@ -208,7 +395,19 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const res = await fetch(`${API_BASE_URL}/reports/stats`, {
     headers: getAuthHeaders()
   });
-  if (!res.ok) throw new Error("Falha ao carregar dashboard");
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("ERRO DASHBOARD:", res.status, errorBody);
+    throw new Error("Falha ao carregar dashboard");
+  }
+  return res.json();
+}
+
+export async function getDocumentTypes(): Promise<string[]> {
+  const res = await fetch(`${API_BASE_URL}/documents/types`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) return [];
   return res.json();
 }
 
@@ -230,7 +429,7 @@ export async function uploadDocument(file: File, title: string): Promise<UploadR
   return res.json();
 }
 
-export async function searchDocuments(query: string, filters?: any): Promise<SearchResult[]> {
+export async function searchDocuments(query: string, filters?: SearchFilters): Promise<SearchResult[]> {
   try {
     const params = new URLSearchParams();
     params.append("query", query);
@@ -257,6 +456,15 @@ export async function searchDocuments(query: string, filters?: any): Promise<Sea
   }
 }
 
+export async function deleteDocument(docId: number) {
+  const res = await fetch(`${API_BASE_URL}/documents/${docId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao excluir documento");
+  return res.json();
+}
+
 export async function generateBIReport(query: string, docType?: string): Promise<BIResponse> {
   const res = await fetch(`${API_BASE_URL}/reports/bi-analysis`, {
     method: "POST",
@@ -266,4 +474,69 @@ export async function generateBIReport(query: string, docType?: string): Promise
 
   if (!res.ok) throw new Error("Falha ao gerar relatório de inteligência");
   return res.json();
+}
+
+export async function sendDocumentChatMessage(docId: number, message: string): Promise<ChatResponse> {
+  const res = await fetch(`${API_BASE_URL}/documents/${docId}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({ message }),
+  });
+
+  if (!res.ok) throw new Error("Falha na comunicação com o chat");
+  return res.json();
+}
+
+// --- NOTIFICAÇÕES E COMPARTILHAMENTO ---
+
+export async function getNotifications(): Promise<Notification[]> {
+  const res = await fetch(`${API_BASE_URL}/notifications`, { headers: getAuthHeaders() });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function markNotificationRead(id: number) {
+  await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+    method: "PATCH", headers: getAuthHeaders()
+  });
+}
+
+export async function markAllRead() {
+  await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
+    method: "POST", headers: getAuthHeaders()
+  });
+}
+
+export async function sendSystemNotification(data: { title: string, message: string, type: string, target_tenant_id?: number | null }) {
+  const res = await fetch(`${API_BASE_URL}/notifications/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Erro ao enviar notificação");
+  return res.json();
+}
+
+export async function createShareLink(docId: number, hours: number = 24) {
+  const res = await fetch(`${API_BASE_URL}/public/share/${docId}?hours=${hours}`, {
+    method: "POST",
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) throw new Error("Erro ao gerar link");
+  return res.json(); 
+}
+
+export async function getPublicDocument(token: string): Promise<PublicDocument> {
+  const res = await fetch(`${API_BASE_URL}/public/view/${token}`);
+  
+  if (res.status === 401) throw new Error("Este link expirou.");
+  if (!res.ok) throw new Error("Documento não encontrado.");
+  
+  const data = await res.json();
+  data.pages = data.pages.map((p: any) => ({
+    ...p,
+    image_url: `${API_BASE_URL}${p.image_url}`
+  }));
+  
+  return data;
 }

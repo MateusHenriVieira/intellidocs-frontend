@@ -3,15 +3,27 @@ import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { getDashboardStats, DashboardStats } from "@/lib/api";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } from "recharts";
-import { Search, Bell, Calendar as CalendarIcon, ArrowUpRight, FileText, Layers, Activity, Loader2, Download, MoreHorizontal, CheckCircle2 } from "lucide-react";
+import { Search, Calendar as CalendarIcon, ArrowUpRight, FileText, Layers, HardDrive, Loader2, MoreHorizontal, CheckCircle2 } from "lucide-react";
+import { NotificationBell } from "@/components/NotificationBell"; // Componente do Sino
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { formatDateOnly } from "@/lib/utils"; // Utilitário de data BR
 
 const COLORS = ['#0f172a', '#334155', '#94a3b8', '#e2e8f0'];
+
+// Formata MB para GB/TB
+function formatStorage(mb: number) {
+  if (!mb || mb === 0) return { value: "0", unit: "KB" };
+  if (mb < 1) return { value: (mb * 1024).toFixed(0), unit: "KB" };
+  else if (mb < 1024) return { value: mb.toFixed(1), unit: "MB" };
+  else if (mb < 1024 * 1024) return { value: (mb / 1024).toFixed(2), unit: "GB" };
+  else return { value: (mb / (1024 * 1024)).toFixed(2), unit: "TB" };
+}
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [storageDisplay, setStorageDisplay] = useState({ value: "0", unit: "MB" });
   const router = useRouter();
 
   useEffect(() => {
@@ -19,7 +31,10 @@ export default function DashboardPage() {
     if (!token) { router.push("/login"); return; }
     
     getDashboardStats()
-      .then(setStats)
+      .then((data) => {
+        setStats(data);
+        setStorageDisplay(formatStorage(data.storage_used_mb));
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -34,12 +49,11 @@ export default function DashboardPage() {
         {/* TOP HEADER */}
         <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-8 sticky top-0 z-40">
           
-          {/* Barra de Busca Global */}
           <div className="flex-1 max-w-xl relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Pesquisar documentos, datas ou valores..." 
+              placeholder="Pesquisar documentos..." 
               className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-slate-900/10 focus:bg-white transition-all placeholder:text-slate-400"
             />
           </div>
@@ -49,19 +63,25 @@ export default function DashboardPage() {
               <CalendarIcon className="w-4 h-4" />
               <span>Hoje</span>
             </div>
-            <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            
+            {/* Sino de Notificações Funcional */}
+            <NotificationBell />
+            
           </div>
         </header>
 
         <div className="p-8 max-w-[1600px] mx-auto space-y-8">
           
+          {/* Título e Ações */}
           <div className="flex justify-between items-end">
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Visão Geral</h2>
-              <p className="text-slate-500 mt-1">Monitoramento em tempo real da gestão documental.</p>
+              <h2 className="text-2xl font-bold text-slate-900">Painel de Controle</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="px-2 py-0.5 bg-slate-200 text-slate-700 text-xs font-bold rounded uppercase tracking-wide">
+                  {stats?.department_view || "Carregando..."}
+                </span>
+                <p className="text-slate-500">Monitoramento em tempo real.</p>
+              </div>
             </div>
             <div className="flex gap-3">
               <Link href="/reports" className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 shadow-sm flex items-center gap-2">
@@ -73,48 +93,62 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* KPIs */}
+          {/* KPIs (Indicadores) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {[
-              { label: "Documentos Arquivados", value: stats?.total_documents || 0, icon: FileText, color: "text-blue-600 bg-blue-50" },
-              { label: "Páginas Processadas", value: stats?.total_pages || 0, icon: Layers, color: "text-purple-600 bg-purple-50" },
-              { label: "Status do Sistema", value: "Operacional", icon: Activity, color: "text-emerald-600 bg-emerald-50" },
-            ].map((item, i) => (
-              <div key={i} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between h-32">
-                <div className="flex justify-between items-start">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{item.label}</span>
-                  <div className={`p-2 rounded-lg ${item.color}`}>
-                    <item.icon className="w-4 h-4" />
-                  </div>
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between h-32">
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Documentos</span>
+                <div className="p-2 rounded-lg text-blue-600 bg-blue-50">
+                  <FileText className="w-4 h-4" />
                 </div>
-                <div className="text-3xl font-bold text-slate-900 tracking-tight">{item.value}</div>
               </div>
-            ))}
+              <div className="text-3xl font-bold text-slate-900 tracking-tight">{stats?.total_documents || 0}</div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between h-32">
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Páginas Lidas</span>
+                <div className="p-2 rounded-lg text-purple-600 bg-purple-50">
+                  <Layers className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-slate-900 tracking-tight">{stats?.total_pages || 0}</div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between h-32">
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Espaço Utilizado</span>
+                <div className="p-2 rounded-lg text-orange-600 bg-orange-50">
+                  <HardDrive className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-3xl font-bold text-slate-900 tracking-tight">{storageDisplay.value}</div>
+                <span className="text-sm font-medium text-slate-500">{storageDisplay.unit}</span>
+              </div>
+            </div>
           </div>
 
-          {/* ÁREA DOS GRÁFICOS */}
+          {/* Gráficos e Listas */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* --- CARD DO GRÁFICO (MODIFICADO PARA DADOS REAIS) --- */}
+            {/* Gráfico de Área (Produção Semanal) */}
             <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100">
               <div className="flex justify-between items-start mb-8">
                 <div>
                   <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Produtividade Semanal</p>
                   <div className="flex items-baseline gap-3">
                     <h3 className="text-3xl font-bold text-slate-900">
-                      {/* Soma total da semana ou mostra o total geral */}
                       {stats?.weekly_activity?.reduce((acc, curr) => acc + curr.value, 0) || 0} Páginas
                     </h3>
                     <span className="flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
-                      <ArrowUpRight className="w-3 h-3 mr-1" /> Últimos 7 dias
+                      <ArrowUpRight className="w-3 h-3 mr-1" /> Recente
                     </span>
                   </div>
                 </div>
               </div>
-              
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  {/* AQUI ESTÁ A MUDANÇA: data={stats?.weekly_activity} */}
                   <AreaChart data={stats?.weekly_activity || []}>
                     <defs>
                       <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
@@ -123,54 +157,33 @@ export default function DashboardPage() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis 
-                      dataKey="name" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{fill: '#94a3b8', fontSize: 12}} 
-                      dy={10} 
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{fill: '#94a3b8', fontSize: 12}} 
-                      allowDecimals={false}
-                    />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} allowDecimals={false} />
                     <Tooltip 
-                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 10px 40px -10px rgba(0,0,0,0.1)'}}
-                      formatter={(value: number) => [`${value} Páginas`, "Produção"]}
-                      labelStyle={{color: '#64748b', marginBottom: '0.5rem'}}
+                      contentStyle={{borderRadius: '12px', border:'none', boxShadow:'0 10px 40px -10px rgba(0,0,0,0.1)'}} 
+                      formatter={(value: number) => [`${value} Páginas`, "Produção"]} 
+                      labelStyle={{color: '#64748b', marginBottom: '0.5rem'}} 
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="value" 
-                      stroke="#0f172a" 
-                      strokeWidth={3} 
-                      fillOpacity={1} 
-                      fill="url(#colorVal)" 
-                      animationDuration={1500}
-                    />
+                    <Area type="monotone" dataKey="value" stroke="#0f172a" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" animationDuration={1500} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            {/* ---------------------------------------------------- */}
 
-            {/* Gráfico de Pizza (Lateral) */}
+            {/* Gráfico de Pizza (Categorias) */}
             <div className="bg-white p-8 rounded-3xl shadow-[0_2px_10px_-4px_rgba(6,81,237,0.1)] border border-slate-100 flex flex-col">
               <div className="mb-4">
                 <h3 className="text-lg font-bold text-slate-900">Categorias</h3>
-                <p className="text-sm text-slate-500">Distribuição dos arquivos</p>
+                <p className="text-sm text-slate-500">Distribuição real</p>
               </div>
-              
               <div className="flex-1 min-h-[200px] relative">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={stats?.documents_by_type || [{name: 'Vazio', value: 1}]}
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
+                    <Pie 
+                      data={stats?.documents_by_type || [{name: 'Sem dados', value: 1}]} 
+                      innerRadius={60} 
+                      outerRadius={80} 
+                      paddingAngle={5} 
                       dataKey="count"
                     >
                       {(stats?.documents_by_type || []).map((entry, index) => (
@@ -182,20 +195,8 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
                   <span className="text-3xl font-bold text-slate-900">{stats?.total_documents}</span>
-                  <span className="text-xs text-slate-400 font-medium uppercase">Total</span>
+                  <span className="text-xs text-slate-400 font-medium uppercase">Docs</span>
                 </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {(stats?.documents_by_type || []).slice(0, 3).map((item, i) => (
-                  <div key={i} className="flex justify-between items-center text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: COLORS[i % COLORS.length]}}></span>
-                      <span className="text-slate-600 truncate max-w-[100px]" title={item.type}>{item.type}</span>
-                    </div>
-                    <span className="font-bold text-slate-900">{item.count}</span>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -208,7 +209,6 @@ export default function DashboardPage() {
                 <MoreHorizontal className="w-5 h-5" />
               </button>
             </div>
-            
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -231,7 +231,8 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td className="py-4 text-sm text-slate-500 font-medium text-right">
-                        {new Date(doc.date).toLocaleDateString()}
+                        {/* Correção de Data aplicada aqui */}
+                        {formatDateOnly(doc.date)}
                       </td>
                       <td className="py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-wide">

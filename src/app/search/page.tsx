@@ -1,12 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { DocumentModal } from "@/components/DocumentModal";
 import { searchDocuments, SearchResult } from "@/lib/api";
-import { Search, Loader2, FileText, Filter, Calendar, Building2, Tag, X, ChevronDown, ArrowRight } from "lucide-react";
+import { Search, Loader2, FileText, Filter, Calendar, Building2, Tag, X, ChevronDown, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function SearchPage() {
+  const router = useRouter();
+
+  // --- BLOQUEIO DE SEGURANÇA ---
+  useEffect(() => {
+    const role = localStorage.getItem("user_role");
+    if (!role) {
+      router.push("/login");
+    } else if (role === "alimentador") {
+      router.push("/");
+      alert("Acesso Restrito: O perfil Alimentador não tem permissão para realizar buscas.");
+    }
+  }, [router]);
+  // -----------------------------
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -14,6 +29,7 @@ export default function SearchPage() {
   const [selectedDoc, setSelectedDoc] = useState<SearchResult | null>(null);
 
   // Estados dos Filtros
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [docType, setDocType] = useState("Todos");
   const [department, setDepartment] = useState("Todos");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
@@ -74,7 +90,7 @@ export default function SearchPage() {
             <p className="text-slate-500">Localize documentos usando inteligência artificial e filtros avançados.</p>
           </header>
 
-          {/* ÁREA DE BUSCA (Estilo Card Flutuante) */}
+          {/* CARD DE BUSCA E FILTROS */}
           <div className="bg-white rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-slate-200 p-6 mb-10">
             <form onSubmit={handleSearch} className="space-y-6">
               
@@ -113,7 +129,7 @@ export default function SearchPage() {
                   label="Tipo Documental" 
                   value={docType} 
                   onChange={setDocType} 
-                  options={["Todos", "Nota Fiscal", "Boleto", "Decreto", "Contrato", "Memorando", "Ofício", "Extrato Bancário"]} 
+                  options={["Todos", "Nota Fiscal", "Boleto", "Decreto", "Contrato", "Memorando", "Ofício", "Extrato Bancário", "Outros"]} 
                 />
 
                 {/* Filtro de Data Duplo */}
@@ -144,7 +160,6 @@ export default function SearchPage() {
 
           {/* RESULTADOS */}
           
-          {/* Loading Skeleton */}
           {loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
               {[1,2,3,4].map(i => (
@@ -159,7 +174,6 @@ export default function SearchPage() {
             </div>
           )}
 
-          {/* Empty State */}
           {!loading && hasSearched && results.length === 0 && (
             <div className="text-center py-20 bg-white rounded-2xl border border-slate-200 border-dashed shadow-sm">
               <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
@@ -171,14 +185,13 @@ export default function SearchPage() {
               </p>
               <button 
                 onClick={() => { setQuery(""); setDocType("Todos"); setDepartment("Todos"); setDateRange({start:"", end:""}); }}
-                className="mt-6 text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors border-b border-slate-300 hover:border-blue-600 pb-0.5"
+                className="mt-6 text-sm font-bold text-blue-600 hover:underline"
               >
                 Limpar todos os filtros
               </button>
             </div>
           )}
 
-          {/* Grid de Cards Profissional */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {results.map((item, index) => (
               <div
@@ -186,28 +199,24 @@ export default function SearchPage() {
                 onClick={() => setSelectedDoc(item)}
                 className="group bg-white rounded-2xl border border-slate-200 overflow-hidden cursor-pointer hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:border-slate-300 transition-all duration-300 flex flex-col h-full"
               >
-                {/* Preview com Overlay */}
+                {/* Preview */}
                 <div className="h-48 bg-slate-100 relative overflow-hidden border-b border-slate-100">
                   <img
                     src={item.preview_url}
                     alt={item.document_title}
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700 ease-out opacity-95 group-hover:opacity-100"
                   />
-                  
-                  {/* Badges Flutuantes */}
                   <div className="absolute top-3 left-3 flex gap-2">
                     <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-white/90 text-slate-700 shadow-sm border border-slate-200 backdrop-blur-sm uppercase tracking-wider">
                       {item.doc_type || "DOC"}
                     </span>
                   </div>
-                  
-                  {/* Score Badge */}
                   <div className={`absolute bottom-3 right-3 text-[10px] font-bold px-2 py-1 rounded-md text-white shadow-sm border border-white/10 backdrop-blur-md flex items-center gap-1 ${item.score === 100 ? 'bg-emerald-600' : 'bg-slate-900/90'}`}>
-                    {item.score === 100 ? <><Tag className="w-3 h-3"/> EXATO</> : `${item.score.toFixed(0)}% RELEVANTE`}
+                    {item.score === 100 ? <><Tag className="w-3 h-3"/> EXATO</> : `${item.score.toFixed(0)}%`}
                   </div>
                 </div>
 
-                {/* Info Body */}
+                {/* Info */}
                 <div className="p-5 flex-1 flex flex-col">
                   <div className="mb-3">
                     <h3 className="font-bold text-slate-800 text-sm line-clamp-2 leading-snug group-hover:text-blue-700 transition-colors mb-1" title={item.document_title}>
@@ -221,7 +230,6 @@ export default function SearchPage() {
                     </div>
                   </div>
 
-                  {/* Snippet OCR */}
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 mt-auto group-hover:bg-blue-50/30 group-hover:border-blue-100 transition-colors">
                     <p className="text-xs text-slate-500 line-clamp-3 italic font-medium leading-relaxed">
                       "{item.text_snippet}"

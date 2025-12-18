@@ -1,11 +1,3 @@
----
-
-# IntelliDocs
-
-**Documentação Técnica v1.0**
-
----
-
 ## 📌 Sumário
 
 * [Visão Geral](#visão-geral-do-projeto)

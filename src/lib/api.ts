@@ -19,6 +19,18 @@ export interface User {
   role: string;
   department: string;
   pages_scanned_count: number;
+  // Novos campos do Backend
+  is_active: boolean;
+  account_expiration?: string; // Data em string ISO
+}
+
+export interface CreateUserRequest {
+  full_name: string;
+  email: string;
+  password: string;
+  role: string;
+  department: string;
+  account_expiration?: string | null;
 }
 
 export interface UserProfile {
@@ -134,8 +146,7 @@ export interface AuditFilters {
   endDate?: string;
 }
 
-//Interface de marca texto
-
+// Interface de marca texto
 export interface OCRWord {
   t: string;        // Texto
   b: [number, number, number, number]; // Box [x0, y0, x1, y1]
@@ -213,7 +224,11 @@ export async function loginUser(username: string, password: string): Promise<any
     body: formData,
   });
 
-  if (!res.ok) throw new Error("Credenciais inválidas ou acesso bloqueado.");
+  if (!res.ok) {
+    // Tenta pegar a mensagem real do backend (ex: "Conta expirada")
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Credenciais inválidas ou acesso bloqueado.");
+  }
   return res.json();
 }
 
@@ -316,7 +331,7 @@ export async function renewTenant(id: number) {
   return res.json();
 }
 
-//função para puxar dados marca texto
+// Função para puxar dados marca texto
 export async function getDocumentPageMetadata(docId: number, pageNum: number): Promise<OCRWord[]> {
   const res = await fetch(`${API_BASE_URL}/documents/${docId}/pages/${pageNum}/metadata`, {
     headers: getAuthHeaders()
@@ -325,8 +340,7 @@ export async function getDocumentPageMetadata(docId: number, pageNum: number): P
   return res.json();
 }
 
-//Função para rodar ciclo de cobrança manualmente
-
+// Função para rodar ciclo de cobrança manualmente
 export async function runBillingCycle() {
   const res = await fetch(`${API_BASE_URL}/admin/billing/run`, {
     method: "POST",
@@ -336,8 +350,7 @@ export async function runBillingCycle() {
   return res.json();
 }
 
-//função para deletar prefeitura
-
+// Função para deletar prefeitura
 export async function deleteTenant(id: number) {
   const res = await fetch(`${API_BASE_URL}/admin/tenants/${id}`, {
     method: "DELETE",
@@ -348,14 +361,13 @@ export async function deleteTenant(id: number) {
 }
 
 // --- ROTAS DE GESTÃO DE SECRETARIAS (DEPARTAMENTOS) ---
-//lista as secretarias da prefeitura logada
+
 export async function listDepartments(): Promise<Department[]> {
   const res = await fetch(`${API_BASE_URL}/departments`, { headers: getAuthHeaders() });
   if (!res.ok) return [];
   return res.json();
 }
 
-// Detalhes completos da Secretaria
 export async function getDepartmentDetails(id: number): Promise<DepartmentDetails> {
   const res = await fetch(`${API_BASE_URL}/departments/${id}/details`, {
     headers: getAuthHeaders()
@@ -363,7 +375,7 @@ export async function getDepartmentDetails(id: number): Promise<DepartmentDetail
   if (!res.ok) throw new Error("Erro ao carregar detalhes");
   return res.json();
 }
-//cria secretaria
+
 export async function createDepartment(data: { name: string, responsible_name: string, email: string, password: string }) {
   const res = await fetch(`${API_BASE_URL}/departments`, {
     method: "POST",
@@ -377,7 +389,6 @@ export async function createDepartment(data: { name: string, responsible_name: s
   return res.json();
 }
 
-//deleta secretaria
 export async function deleteDepartment(id: number) {
   const res = await fetch(`${API_BASE_URL}/departments/${id}`, {
     method: "DELETE",
@@ -389,15 +400,14 @@ export async function deleteDepartment(id: number) {
 
 // --- ROTAS DE GESTÃO DE EQUIPE (USUÁRIOS) ---
 
-//lista os usuários da prefeitura logada
 export async function listCompanyUsers(): Promise<User[]> {
   const res = await fetch(`${API_BASE_URL}/users`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error("Erro ao listar usuários");
   return res.json();
 }
 
-//cria usuário na prefeitura logada
-export async function createCompanyUser(userData: any) {
+// Cria usuário (AGORA COM TIPAGEM E SUPORTE A VISITANTES)
+export async function createCompanyUser(userData: CreateUserRequest) {
   const res = await fetch(`${API_BASE_URL}/users`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
@@ -410,7 +420,6 @@ export async function createCompanyUser(userData: any) {
   return res.json();
 }
 
-//deleta usuário da prefeitura logada
 export async function deleteCompanyUser(id: number) {
   const res = await fetch(`${API_BASE_URL}/users/${id}`, {
     method: "DELETE",
@@ -475,7 +484,6 @@ export async function uploadDocument(file: File, title: string): Promise<UploadR
   return res.json();
 }
 
-
 // Função de busca de documentos com filtros opcionais
 export async function searchDocuments(query: string, filters?: SearchFilters): Promise<SearchResult[]> {
   try {
@@ -504,7 +512,7 @@ export async function searchDocuments(query: string, filters?: SearchFilters): P
   }
 }
 
-//deleta documento
+// Deleta documento
 export async function deleteDocument(docId: number) {
   const res = await fetch(`${API_BASE_URL}/documents/${docId}`, {
     method: "DELETE",
@@ -540,28 +548,24 @@ export async function sendDocumentChatMessage(docId: number, message: string): P
 
 // --- NOTIFICAÇÕES E COMPARTILHAMENTO ---
 
-// Puxa notificações do usuário logado
 export async function getNotifications(): Promise<Notification[]> {
   const res = await fetch(`${API_BASE_URL}/notifications`, { headers: getAuthHeaders() });
   if (!res.ok) return [];
   return res.json();
 }
 
-// Marca notificação como lida
 export async function markNotificationRead(id: number) {
   await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
     method: "PATCH", headers: getAuthHeaders()
   });
 }
 
-// Marca todas como lidas
 export async function markAllRead() {
   await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
     method: "POST", headers: getAuthHeaders()
   });
 }
 
-// Envia notificação do sistema
 export async function sendSystemNotification(data: { title: string, message: string, type: string, target_tenant_id?: number | null }) {
   const res = await fetch(`${API_BASE_URL}/notifications/send`, {
     method: "POST",
@@ -573,16 +577,27 @@ export async function sendSystemNotification(data: { title: string, message: str
 }
 
 // Gera link público de compartilhamento
+// FIX: Ajustado para retornar Query Param compatível com Desktop App (/view?token=TOKEN)
 export async function createShareLink(docId: number, hours: number = 24) {
   const res = await fetch(`${API_BASE_URL}/public/share/${docId}?hours=${hours}`, {
     method: "POST",
     headers: getAuthHeaders()
   });
+  
   if (!res.ok) throw new Error("Erro ao gerar link");
-  return res.json(); 
+  
+  const data = await res.json();
+  
+  // Transformação crítica para App Desktop:
+  // O backend devolve "path: /view/TOKEN", mas o app estático só entende "/view?token=TOKEN"
+  if (data.token) {
+    data.url_path = `/view?token=${data.token}`;
+  }
+  
+  return data;
 }
 
-// Puxa logs de auditoria com filtros opcionais
+// Puxa logs de auditoria
 export async function getAuditLogs(filters?: AuditFilters): Promise<AuditLog[]> {
   const params = new URLSearchParams();
   
@@ -591,7 +606,6 @@ export async function getAuditLogs(filters?: AuditFilters): Promise<AuditLog[]> 
   if (filters?.startDate) params.append("start_date", filters.startDate);
   if (filters?.endDate) params.append("end_date", filters.endDate);
   
-  // Aumentei o limite padrão para 100
   params.append("limit", "100");
 
   const res = await fetch(`${API_BASE_URL}/audit?${params.toString()}`, { 
@@ -618,9 +632,8 @@ export async function getPublicDocument(token: string): Promise<PublicDocument> 
   return data;
 }
 
-// Puxa links públicos associados a um documento
+// Puxa links públicos
 export async function getDocumentLinks(docId: number) {
-  // ATENÇÃO: Verifique se API_BASE_URL está correto (sem barra no final geralmente)
   const res = await fetch(`${API_BASE_URL}/documents/${docId}/links`, {
     headers: getAuthHeaders()
   });

@@ -1,13 +1,23 @@
 "use client";
-import { useEffect, useState, use } from "react";
+
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { getPublicDocument, PublicDocument } from "@/lib/api";
 import { Loader2, FileText, AlertTriangle, Eye } from "lucide-react";
 
-// Tipagem atualizada para Next.js 15+
-export default function PublicViewPage({ params }: { params: Promise<{ token: string }> }) {
-  
-  // Desembrulha a Promise dos parâmetros
-  const { token } = use(params);
+// Componente de Carregamento Reutilizável
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <Loader2 className="w-10 h-10 animate-spin text-slate-900" />
+    </div>
+  );
+}
+
+// Componente com a Lógica Principal (precisa estar dentro de Suspense para ler URL)
+function ViewContent() {
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token"); // Pega ?token=XYZ da URL
 
   const [doc, setDoc] = useState<PublicDocument | null>(null);
   const [error, setError] = useState("");
@@ -16,6 +26,9 @@ export default function PublicViewPage({ params }: { params: Promise<{ token: st
   useEffect(() => {
     if (token) {
       loadDoc(token);
+    } else {
+      setLoading(false);
+      setError("Link inválido: Nenhum token fornecido.");
     }
   }, [token]);
 
@@ -24,13 +37,13 @@ export default function PublicViewPage({ params }: { params: Promise<{ token: st
       const data = await getPublicDocument(tokenVal);
       setDoc(data);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Erro ao carregar documento.");
     } finally {
       setLoading(false);
     }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-10 h-10 animate-spin text-slate-900"/></div>;
+  if (loading) return <LoadingScreen />;
 
   if (error) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
@@ -80,8 +93,6 @@ export default function PublicViewPage({ params }: { params: Promise<{ token: st
                 className="max-w-full shadow-lg rounded border border-slate-200 transition-transform duration-300 group-hover:scale-[1.01]"
               />
             </div>
-
-            {/* REMOVIDO: Área de Texto Extraído (OCR) */}
             
           </div>
         ))}
@@ -91,5 +102,14 @@ export default function PublicViewPage({ params }: { params: Promise<{ token: st
         Documento disponibilizado via IntelliDocs Gov. O link expira em breve.
       </footer>
     </div>
+  );
+}
+
+// Exportação Principal (Wrapper com Suspense obrigatório para useSearchParams em build estático)
+export default function PublicViewPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <ViewContent />
+    </Suspense>
   );
 }

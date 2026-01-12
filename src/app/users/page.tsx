@@ -54,7 +54,7 @@ export default function TeamPage() {
       router.push("/login");
     } else if (role === "consultor" || role === "alimentador") {
       router.push("/");
-      // alert("Acesso Negado: Você não tem permissão para gerenciar equipe."); // Opcional
+       alert("Acesso Negado: Você não tem permissão para gerenciar equipe."); // Opcional
     } else {
       initData();
     }
@@ -84,7 +84,7 @@ export default function TeamPage() {
     }
   }
 
-  // --- ACTIONS ---
+  // --- AÇÕES ---
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

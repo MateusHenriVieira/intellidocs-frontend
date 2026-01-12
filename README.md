@@ -153,7 +153,7 @@ Backend Docs: http://localhost:8000/docs
 
 ---
 
-© 2025 IntelliDocs — Documentação gerada automaticamente.
+© 2025 IntelliDocs — Gestão Documental com IA.
 
 ---
 
